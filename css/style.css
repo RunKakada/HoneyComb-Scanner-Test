@@ -1,0 +1,564 @@
+/* ==================================================
+   AI Honeycomb Inspector v4
+   Mobile-First Redesign
+   Design philosophy:
+   Camera is king. UI lives at the edges only.
+   A bottom sheet surfaces data without blocking the view.
+================================================== */
+
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+    --bg:         #020617;
+    --cyan:       #00c8ff;
+    --blue:       #0078ff;
+    --green:      #00dc64;
+    --yellow:     #ffb000;
+    --red:        #ff4040;
+    --panel:      rgba(2, 6, 23, 0.88);
+    --panel-blur: blur(16px);
+    --text:       #ffffff;
+    --muted:      #8899aa;
+    --border:     rgba(0, 200, 255, 0.15);
+    --radius-sm:  10px;
+    --radius-md:  18px;
+    --radius-lg:  24px;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ==================================================
+   CAMERA STAGE — fills 100%
+================================================== */
+
+.ar-app {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    position: relative;
+}
+
+.ar-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#cameraVideo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: #000;
+    z-index: 1;
+}
+
+#processCanvas {
+    display: none;
+}
+
+#arCanvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 2;
+}
+
+/* ==================================================
+   TOP BAR — slim, always visible
+================================================== */
+
+.top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    background: linear-gradient(to bottom, rgba(2,6,23,0.85) 0%, transparent 100%);
+}
+
+.top-bar-title {
+    display: flex;
+    flex-direction: column;
+}
+
+.top-bar-title h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--cyan);
+    text-shadow: 0 0 10px rgba(0,200,255,0.6);
+    letter-spacing: 0.3px;
+}
+
+.top-bar-title p {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 1px;
+}
+
+/* ==================================================
+   MODEL BADGE
+================================================== */
+
+.model-badge {
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--yellow);
+    color: #000;
+    animation: pulse-badge 1.5s infinite;
+    white-space: nowrap;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 0.6; }
+    50%       { opacity: 1; }
+}
+
+/* ==================================================
+   LIVE INDICATOR STRIP — always-visible slim row
+   Shows void count + severity without hiding camera
+================================================== */
+
+.live-strip {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 0 12px;
+    pointer-events: none;
+}
+
+.strip-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+}
+
+.strip-pill .label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.strip-pill .value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.strip-pill .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    flex-shrink: 0;
+}
+
+.strip-pill .dot.warning { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+.strip-pill .dot.severe  { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+
+/* Severity mini-bar inside strip */
+.severity-mini {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+}
+
+.severity-mini .sev-label {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.severity-mini-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    overflow: hidden;
+}
+
+#severityFill {
+    width: 0%;
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--green), var(--yellow), var(--red));
+}
+
+.severity-mini .sev-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--green);
+    white-space: nowrap;
+    min-width: 28px;
+    text-align: right;
+}
+
+/* ==================================================
+   CONTROL BAR — bottom floating pill
+================================================== */
+
+.control-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 35;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    gap: 6px;
+    padding: 10px 12px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--border);
+    backdrop-filter: var(--panel-blur);
+    -webkit-backdrop-filter: var(--panel-blur);
+}
+
+.control-bar button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    transition: color 0.2s, background 0.2s;
+    min-width: 48px;
+    font-family: inherit;
+}
+
+.control-bar button:active {
+    background: rgba(0, 200, 255, 0.12);
+    color: var(--cyan);
+}
+
+.control-bar button .btn-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.control-bar button .btn-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: inherit;
+}
+
+/* Start button — primary */
+#startBtn {
+    background: var(--cyan) !important;
+    color: #000 !important;
+    border-radius: var(--radius-sm) !important;
+    padding: 8px 14px !important;
+}
+#startBtn .btn-label { color: #000 !important; }
+#startBtn:active { opacity: 0.8; }
+
+/* ==================================================
+   BOTTOM SHEET — slide-up stats panel
+================================================== */
+
+.bottom-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0,0,0,0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+}
+
+.bottom-sheet-backdrop.open {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.bottom-sheet {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 45;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.bottom-sheet.open {
+    transform: translateY(0);
+}
+
+.sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    margin: 12px auto 4px;
+}
+
+.sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.sheet-header h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--cyan);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.sheet-close {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: var(--muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Sheet sections */
+.sheet-section {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.sheet-section:last-child {
+    border-bottom: none;
+}
+
+.sheet-section-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+/* Stat grid */
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.stat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+}
+
+.stat-card .stat-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.stat-card .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+}
+
+.stat-card .stat-value.cyan   { color: var(--cyan); }
+.stat-card .stat-value.green  { color: var(--green); }
+.stat-card .stat-value.yellow { color: var(--yellow); }
+.stat-card .stat-value.red    { color: var(--red); }
+
+/* Measurement row */
+.measure-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.measure-row:last-child { border-bottom: none; }
+
+.measure-row .m-label { font-size: 13px; color: var(--muted); }
+.measure-row .m-value { font-size: 14px; font-weight: 700; color: var(--text); }
+
+/* Scale input row */
+.scale-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.scale-row label {
+    font-size: 13px;
+    color: var(--muted);
+    flex: 1;
+}
+
+#scaleInput {
+    width: 90px;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    text-align: center;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+#scaleInput:focus {
+    outline: none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 2px rgba(0,200,255,0.15);
+}
+
+/* Severity full display in sheet */
+.severity-full {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.severity-score {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--green);
+    line-height: 1;
+    min-width: 70px;
+}
+
+.severity-detail {
+    flex: 1;
+}
+
+.severity-detail .sev-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 6px;
+}
+
+.severity-bar-full {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    overflow: hidden;
+}
+
+/* ==================================================
+   FROZEN BADGE
+================================================== */
+
+.frozen-badge {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--yellow);
+    text-shadow: 0 0 20px var(--yellow);
+    background: rgba(0,0,0,0.5);
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255,176,0,0.4);
+    z-index: 30;
+    letter-spacing: 1px;
+    backdrop-filter: blur(8px);
+}
+
+/* ==================================================
+   UTILITIES
+================================================== */
+
+.hidden { display: none !important; }
+
+/* ==================================================
+   LANDSCAPE SUPPORT
+================================================== */
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .live-strip { bottom: 64px; }
+
+    .control-bar {
+        padding: 6px 16px;
+    }
+
+    .control-bar button {
+        flex-direction: row;
+        gap: 6px;
+        min-width: auto;
+    }
+
+    .control-bar button .btn-icon { font-size: 16px; }
+    .control-bar button .btn-label { font-size: 10px; }
+}
