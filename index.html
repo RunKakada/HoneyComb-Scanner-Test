@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>AI Honeycomb Inspector v4 | YOLOv8 Web AR</title>
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#020617" />
+</head>
+
+<body>
+<main class="ar-app">
+<section class="ar-stage">
+
+    <!-- Live Camera -->
+    <video id="cameraVideo" autoplay playsinline muted></video>
+
+    <!-- Hidden Canvas For Frame Processing -->
+    <canvas id="processCanvas"></canvas>
+
+    <!-- Visible AR Overlay -->
+    <canvas id="arCanvas"></canvas>
+
+    <!-- ── TOP BAR ── slim, always visible -->
+    <div id="topHud" class="top-bar">
+        <div class="top-bar-title">
+            <h1>AI Honeycomb Inspector</h1>
+            <p>v4 YOLOv8 Web AR · Concrete Surface Scan</p>
+        </div>
+        <div id="modelBadge" class="model-badge">MODEL LOADING</div>
+    </div>
+
+    <!-- ── LIVE STRIP ── always-visible at bottom, doesn't block camera -->
+    <div class="live-strip">
+        <!-- Void count pill -->
+        <div class="strip-pill">
+            <div class="dot" id="statusDot"></div>
+            <span class="label">Voids</span>
+            <span class="value" id="voidCount">0</span>
+        </div>
+
+        <!-- Severity mini bar -->
+        <div class="severity-mini">
+            <span class="sev-label">Severity</span>
+            <div class="severity-mini-bar">
+                <div id="severityFill"></div>
+            </div>
+            <span class="sev-value" id="riskPercent">0%</span>
+            <span class="sev-value" id="severityLabel" style="margin-left:2px">MINOR</span>
+        </div>
+
+        <!-- Stats button -->
+        <div class="strip-pill" id="statsBtn" style="cursor:pointer; pointer-events:all;">
+            <span style="font-size:18px">📊</span>
+        </div>
+    </div>
+
+    <!-- ── FROZEN BADGE ── -->
+    <div id="frozenBadge" class="frozen-badge hidden">⏸ FROZEN</div>
+
+    <!-- ── CONTROL BAR ── -->
+    <div class="control-bar">
+        <button id="startBtn">
+            <span class="btn-icon">📷</span>
+            <span class="btn-label">Start</span>
+        </button>
+        <button id="freezeBtn">
+            <span class="btn-icon">⏸</span>
+            <span class="btn-label" id="freezeLabel">Freeze</span>
+        </button>
+        <button id="overlayBtn">
+            <span class="btn-icon">🧿</span>
+            <span class="btn-label">Overlay</span>
+        </button>
+        <button id="surfaceBtn">
+            <span class="btn-icon">🧱</span>
+            <span class="btn-label">ROI</span>
+        </button>
+        <button id="saveBtn">
+            <span class="btn-icon">💾</span>
+            <span class="btn-label">Save</span>
+        </button>
+        <button id="resetBtn">
+            <span class="btn-icon">🔄</span>
+            <span class="btn-label">Reset</span>
+        </button>
+    </div>
+
+    <!-- ── BOTTOM SHEET BACKDROP ── -->
+    <div class="bottom-sheet-backdrop" id="sheetBackdrop"></div>
+
+    <!-- ── BOTTOM SHEET ── slide-up stats panel -->
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="sheet-handle"></div>
+
+        <div class="sheet-header">
+            <h2>Inspection Stats</h2>
+            <button class="sheet-close" id="sheetClose">✕</button>
+        </div>
+
+        <!-- Scan status cards -->
+        <div class="sheet-section">
+            <div class="sheet-section-title">Live Status</div>
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value cyan" id="scanStatus">READY</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">AI Model</div>
+                    <div class="stat-value green" id="modelStatus">Not Loaded</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">FPS</div>
+                    <div class="stat-value" id="fpsValue">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Frames</div>
+                    <div class="stat-value" id="frameCount">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Elapsed</div>
+                    <div class="stat-value" id="elapsedTime">00:00</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Concrete ROI</div>
+                    <div class="stat-value cyan" id="surfaceStatus">Active</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Severity -->
+        <div class="sheet-section">
+            <div class="sheet-section-title">Honeycomb Severity</div>
+            <div class="severity-full">
+                <div class="severity-score" id="sheetRiskPercent">0%</div>
+                <div class="severity-detail">
+                    <div class="sev-name" id="sheetSeverityLabel">MINOR</div>
+                    <div class="severity-bar-full">
+                        <div id="severityFillSheet" style="width:0%;height:100%;border-radius:999px;background:linear-gradient(90deg,#00dc64,#ffb000,#ff4040);transition:.3s"></div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top:8px; font-size:11px; color:var(--muted)">Active voids: <span id="activeVoids">0</span></div>
+        </div>
+
+        <!-- Measurement -->
+        <div class="sheet-section">
+            <div class="sheet-section-title">Void Measurement</div>
+            <div class="measure-row">
+                <span class="m-label">Total Void Area</span>
+                <span class="m-value" id="totalAreaCm2">0.00 cm²</span>
+            </div>
+            <div class="measure-row">
+                <span class="m-label">Largest Void</span>
+                <span class="m-value" id="largestAreaCm2">0.00 cm²</span>
+            </div>
+            <div class="measure-row" style="margin-top:6px">
+                <label class="m-label" for="scaleInput">Scale (cm / pixel)</label>
+                <input id="scaleInput" type="number" min="0.001" step="0.001" value="0.050" />
+            </div>
+        </div>
+
+        <!-- Info -->
+        <div class="sheet-section">
+            <div class="sheet-section-title">About</div>
+            <div style="font-size:12px; color:var(--muted); line-height:1.6">
+                YOLOv8 detects honeycomb voids only inside the concrete surface area. Measurement converts pixel area to cm² using the calibration scale above.
+            </div>
+        </div>
+
+    </div><!-- /bottom-sheet -->
+
+</section>
+</main>
+
+<!-- ONNX Runtime Web -->
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+
+<!-- App Scripts -->
+<script src="js/camera.js"></script>
+<script src="js/concrete-surface.js"></script>
+<script src="js/measurement.js"></script>
+<script src="js/yolo-detector.js"></script>
+<script src="js/ar-overlay.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/export.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
